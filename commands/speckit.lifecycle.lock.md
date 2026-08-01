@@ -1,50 +1,68 @@
 ---
-description: "Lock the spec lifecycle — freeze spec/plan/tasks from further direct modification"
+description: "Transition spec to locked phase — blocks commands per lifecycle-config.yml"
 ---
 
 # Lock Lifecycle
 
-Finalize the feature's specification artifacts. After locking:
-- Core SDD commands (`/speckit.specify`, `/speckit.clarify`, `/speckit.plan`,
-  `/speckit.tasks`, `/speckit.checklist`, `/speckit.analyze`) will be **blocked**
-- `/speckit.sync.apply` and `/speckit.sync.backfill` will be **blocked**
-- Controlled paths remain open:
-  - `/speckit.refine.update` / `refine.propagate` / `refine.diff` / `refine.status`
-  - `/speckit.bugfix.report` / `bugfix.patch` / `bugfix.verify`
+Transition the active feature's spec to a restricted phase. Which commands
+are blocked and which are allowed is defined entirely in `lifecycle-config.yml`
+— no command names are hardcoded.
+
+## Parameters
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `--phase` | No | Phase name to transition to. Defaults to `lock_target` from config (default: `"locked"`) |
+| `--spec-dir` | No | Target a specific spec directory. Defaults to active spec from `feature.json` |
+| `--reason` | No | Optional description of why the phase changed |
+| `--yes` / `-y` | No | Skip confirmation prompt |
 
 ## Action
 
-1. **Confirm with user**: Ask explicitly before locking.
+1. **Determine target**: If `--spec-dir` provided, use it. Otherwise read `.specify/feature.json` for active spec.
+
+2. **Load config**: Read `lifecycle-config.yml`. If missing, use defaults (locked → `"locked"`).
+
+3. **Read current state**: Check `{spec_dir}/.lifecycle.json`. If already at target phase, output:
    ```
-   Lock spec lifecycle? This will block destructive commands.
-   Only refine.* and bugfix.* will be available.
+   ℹ️ Spec is already in phase "[phase]". Nothing to change.
+   ```
+
+4. **Confirm** (unless `--yes`):
+   ```
+   Lock spec lifecycle to phase "[phase]"?
+   
+   Blocked commands: [list from config]
+   Allowed commands: [list from config]
+   
    Proceed? (yes/no)
    ```
 
-2. **If confirmed**, create/update `.specify/lifecycle.json`:
+5. **If confirmed**, write `.lifecycle.json`:
    ```json
    {
-     "phase": "locked",
+     "phase": "[phase]",
      "locked_at": "[ISO_DATE]",
-     "locked_by": "user"
+     "locked_by": "[caller or 'user']",
+     "reason": "[reason if provided]"
    }
    ```
 
-3. **Output confirmation**:
+6. **Output confirmation**:
    ```
-   🔒 Spec lifecycle locked.
+   🔒 Spec lifecycle: [spec_name]
+   Phase: [phase]
    
-   Blocked:  specify, clarify, plan, tasks, checklist, analyze, sync.apply, sync.backfill
-   Allowed:  refine.*, bugfix.*, converge, review.*, verify.*, sync.analyze, sync.propose, doctor, git.*
+   Blocked:  [blocked commands from config]
+   Allowed:  [allowed commands from config]
    
    Use /speckit.lifecycle.status to verify.
    To unlock: /speckit.lifecycle.unlock
    ```
 
-4. **Optional**: Run `/speckit.git.commit` to commit the lock state.
-
 ## Rules
 
-- Requires explicit user confirmation — never lock silently
-- Write the lifecycle.json file with valid JSON
-- The lock applies at the project level, not per-feature
+- Requires explicit user confirmation unless `--yes` is passed
+- Writes valid JSON to `{spec_dir}/.lifecycle.json`
+- Creates the spec directory if it does not exist
+- The `after_lifecycle_lock` hook fires after this command completes

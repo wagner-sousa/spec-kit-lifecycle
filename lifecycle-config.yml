@@ -1,38 +1,56 @@
 # Lifecycle Extension Configuration
-# Edit this file to customize blocking behavior.
+# Edit this file to customize phase-gating behavior.
 
-# Commands that are blocked when lifecycle is locked
-blocked_commands:
-  - specify
-  - clarify
-  - plan
-  - tasks
-  - checklist
-  - analyze
-  - sync.apply
-  - sync.backfill
+# Phase target for lock command (default if --phase not provided)
+lock_target: "locked"
 
-# Commands that remain available when lifecycle is locked
-allowed_commands:
-  - refine.*
-  - bugfix.*
-  - converge
-  - review.*
-  - verify.*
-  - verify-tasks.*
-  - sync.analyze
-  - sync.propose
-  - sync.conflicts
-  - doctor.*
-  - git.*
-  - agent-context.*
-  - switch.*
-  - lifecycle.*
+# Phase target for unlock command (default if --phase not provided)
+unlock_target: "active"
 
-# Auto-lock triggers: events that suggest locking automatically
-# Set enabled: true to auto-suggest lock after an event
+# Define phases and their command restrictions.
+# Each phase has blocked and allowed command patterns.
+# Patterns: exact match ("specify") or glob ("review.*", "*" for all).
+# If a command matches both blocked and allowed, allowed wins.
+phases:
+  active:
+    blocked: []
+    allowed:
+      - "*"
+
+  locked:
+    blocked:
+      - "specify"
+      - "clarify"
+      - "plan"
+      - "tasks"
+      - "checklist"
+      - "analyze"
+      - "sync.apply"
+      - "sync.backfill"
+    allowed:
+      - "lifecycle.*"
+      - "review.*"
+      - "verify.*"
+      - "verify-tasks.*"
+      - "sync.*"
+      - "git.*"
+      - "doctor.*"
+      - "agent-context.*"
+      - "switch.*"
+      - "converge"
+      - "refine.*"
+      - "bugfix.*"
+      - "implement"
+      - "taskstoissues"
+
+# Auto-lock triggers: events that suggest locking automatically.
+# Set enabled: true to auto-suggest lock after an event.
 auto_lock_triggers:
   - event: after_converge
     enabled: false
   - event: after_implement
     enabled: false
+
+# Agent context file target (optional).
+# Defaults to AGENTS.md. Override for different agent integrations.
+# context_file: "AGENTS.md"

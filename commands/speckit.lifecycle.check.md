@@ -1,40 +1,52 @@
 ---
-description: "Check lifecycle phase — blocks execution when spec is locked"
+description: "Check lifecycle phase — blocks execution based on phase config"
 ---
 
 # Lifecycle Check
 
-Guard command. Runs as a mandatory before_* hook for core SDD commands.
-Reads `.specify/lifecycle.json` and either passes or blocks.
+Guard command. Runs as a mandatory `before_*` hook for any command you want
+to protect. Reads `specs/{feature}/.lifecycle.json`, looks up the current
+phase in `lifecycle-config.yml`, and either passes or blocks based on the
+phase's command restrictions.
 
 ## Prerequisites
 
-1. Check if `.specify/lifecycle.json` exists.
-2. If it does **not** exist → **PASS**. Output:
-   ```
-   ✅ Lifecycle: active (no lock file)
-   ```
-3. If it exists → read JSON and extract `phase` field.
+1. Load `lifecycle-config.yml` from the extension directory.
+2. Determine active spec directory from `.specify/feature.json` → `feature_directory`.
+3. Read `{feature_directory}/.lifecycle.json` — extract `phase` field.
 
 ## Decision
 
-### phase: "active" → PASS
+### No `.lifecycle.json` found → PASS
+
+```
+✅ Lifecycle: active (default — no lock file)
+```
+
+### Phase matches `unlock_target` (default: `active`) → PASS
+
 ```
 ✅ Lifecycle: active
+All commands available.
 ```
 
-### phase: "locked" → BLOCK
+### Phase has restrictions in config → CHECK
+
+For each command about to run, check if it matches any pattern in the phase's
+`blocked` list. If it does AND does NOT match any pattern in the `allowed` list → BLOCK.
+
 ```
-⛔ SPEC IS LOCKED
-This spec was finalized on [locked_at].
-Direct modification of spec/plan/tasks artifacts is blocked.
+⛔ SPEC IS [phase_name]
 
-Use one of these controlled paths:
-- /speckit.refine.update → update spec in-place (with audit trail)
-- /speckit.bugfix.patch  → surgically patch artifacts (with traceability)
+This spec is in phase "[phase_name]" since [locked_at].
+Reason: [reason if set]
 
-To unlock temporarily:
-- /speckit.lifecycle.unlock → re-enable all commands
+The following commands are blocked in this phase:
+  - [list of blocked commands from config]
+
+To proceed:
+- /speckit.lifecycle.unlock — transition back to active phase
+- /speckit.lifecycle.status — see full command matrix
 ```
 
 **Do NOT proceed with the parent command. Stop execution here.**
@@ -42,5 +54,8 @@ To unlock temporarily:
 ## Rules
 
 - Read-only — never modifies any file
-- If JSON is malformed or missing `phase`, treat as `active` (fail-open)
+- If `.lifecycle.json` is malformed or missing `phase`, treat as `active` (fail-open)
+- If `lifecycle-config.yml` is missing, treat as `active` (fail-open)
+- Pattern matching: exact match first, then glob (`*` for any, `prefix.*` for subcommands)
+- `allowed` overrides `blocked` when a command matches both
 - After outputting BLOCK, do not continue the parent command execution

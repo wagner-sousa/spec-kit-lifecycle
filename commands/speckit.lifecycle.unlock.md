@@ -1,47 +1,73 @@
 ---
-description: "Unlock the spec lifecycle — re-enable all commands"
+description: "Transition spec back to active phase — re-enables unrestricted commands"
 ---
 
 # Unlock Lifecycle
 
-Re-open the spec lifecycle. After unlocking, all commands return to normal operation.
-Use this when you need to make structural changes to spec artifacts after locking.
+Transition a spec back to the active (unrestricted) phase. After unlocking,
+all commands return to normal operation as defined by the active phase in
+`lifecycle-config.yml`.
+
+## Parameters
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `--phase` | No | Phase to transition to. Defaults to `unlock_target` from config (default: `"active"`) |
+| `--spec-dir` | No | Target a specific spec directory. Defaults to active spec from `feature.json` |
+| `--reason` | No | Optional description of why the phase changed |
+| `--yes` / `-y` | No | Skip confirmation prompt |
 
 ## Action
 
-1. **Verify current state**: Read `.specify/lifecycle.json`. If not found or `phase: active`, output:
+1. **Determine target**: If `--spec-dir` provided, use it. Otherwise read `.specify/feature.json`.
+
+2. **Read current state**: Check `{spec_dir}/.lifecycle.json`. If not found or already at target phase:
    ```
-   ℹ️ Lifecycle is already active. Nothing to unlock.
+   ℹ️ Spec is already in phase "[phase]". Nothing to unlock.
    ```
 
-2. **If locked**, confirm with user:
+3. **Confirm** (unless `--yes`):
    ```
-   Unlock spec lifecycle? This will re-enable all commands.
+   Unlock spec lifecycle from "[current_phase]" to "[target_phase]"?
+   All commands will be re-enabled.
    Proceed? (yes/no)
    ```
 
-3. **If confirmed**, update `.specify/lifecycle.json`:
+4. **If confirmed**, update `.lifecycle.json`:
    ```json
    {
-     "phase": "active",
+     "phase": "[target_phase]",
      "locked_at": null,
      "locked_by": null,
-     "unlocked_at": "[ISO_DATE]"
+     "unlocked_at": "[ISO_DATE]",
+     "reason": "[reason if provided]"
    }
    ```
 
-4. **Output confirmation**:
+5. **Output confirmation**:
    ```
-   🔓 Spec lifecycle unlocked.
+   🔓 Spec lifecycle: [spec_name]
+   Phase: [target_phase]
+   
    All commands are now available.
    
    To lock again: /speckit.lifecycle.lock
    ```
 
-5. **Optional**: Run `/speckit.git.commit` to commit the unlock state.
+## Cross-Plugin Usage
+
+Any extension or workflow can unlock a specific spec:
+```
+/speckit.lifecycle.unlock --spec-dir specs/013-fix-auth --yes
+```
+
+The `--yes` flag skips confirmation for automated callers. The
+`after_lifecycle_unlock` hook fires after this command completes,
+syncing the change to the agent context.
 
 ## Rules
 
-- Requires explicit user confirmation
-- After unlock, consider running `/speckit.sync.analyze` to check for drift
-- Consider re-locking with `/speckit.lifecycle.lock` after changes are done
+- Requires explicit user confirmation unless `--yes` is passed
+- `--spec-dir` allows external callers (plugins, workflows) to target any spec
+- After unlock, the current phase's command restrictions (usually none for `active`) apply
+- The `after_lifecycle_unlock` hook fires after this command completes
